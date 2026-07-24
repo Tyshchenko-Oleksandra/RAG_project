@@ -1,0 +1,31 @@
+# secrets
+.env
+*.env
+
+# virtual environments
+venv/
+.venv/
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# editors
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# RAG / embeddings / local databases
+chroma/
+vectorstore/
+faiss_index/
+*.sqlite
+*.db
+
+data/
