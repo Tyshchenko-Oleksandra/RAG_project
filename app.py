@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from rag import answer_question
+from rag import answer_question, get_available_subjects
 
 app = FastAPI()
 
@@ -17,6 +17,13 @@ def home():
     }
 
 
+
+@app.get("/subjects")
+def get_subjects():
+    subjects = get_available_subjects()
+    return {"subjects": subjects}
+
+
 @app.post("/ask")
 def ask_question(request: QuestionRequest):
     result = answer_question(
@@ -25,3 +32,4 @@ def ask_question(request: QuestionRequest):
     )
 
     return result
+

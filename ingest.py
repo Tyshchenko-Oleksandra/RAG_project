@@ -17,22 +17,25 @@ chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
 collection = chroma_client.get_or_create_collection(name="university_notes")
 
 
-def read_pdf(file_path: Path) -> str:
+def read_pdf(file_path: Path) -> list[dict]:
     reader = PdfReader(str(file_path))
-    texts = []
+    pages = []
 
     for page_number, page in enumerate(reader.pages, start=1):
         page_text = page.extract_text() or ""
 
         if page_text.strip():
-            texts.append(f"Page {page_number}:\n{page_text.strip()}")
+            pages.append({
+                "text": page_text.strip(),
+                "page": page_number
+            })
 
-    return "\n\n".join(texts)
+    return pages
 
 
-def read_pptx(file_path: Path) -> str:
+def read_pptx(file_path: Path) -> list[dict]:
     presentation = Presentation(file_path)
-    texts = []
+    slides = []
 
     for slide_number, slide in enumerate(presentation.slides, start=1):
         slide_text = []
@@ -42,9 +45,12 @@ def read_pptx(file_path: Path) -> str:
                 slide_text.append(shape.text.strip())
 
         if slide_text:
-            texts.append(f"Slide {slide_number}:\n" + "\n".join(slide_text))
+            slides.append({
+                "text": "\n".join(slide_text),
+                "slide": slide_number
+            })
 
-    return "\n\n".join(texts)
+    return slides
 
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[str]:
@@ -75,34 +81,73 @@ def ingest_file(file_path: Path, subject: str):
     print(f"\nReading: {file_path}")
 
     if file_path.suffix.lower() == ".pdf":
-        text = read_pdf(file_path)
+        pages = read_pdf(file_path)
+
+        if not pages:
+            print(f"No text found in {file_path.name}. Можливо, це скан або картинка.")
+            return
+
+        for page_data in pages:
+            page_number = page_data["page"]
+            text = page_data["text"]
+
+            chunks = chunk_text(text)
+
+            for index, chunk in enumerate(chunks):
+                embedding = create_embedding(chunk)
+
+                doc_id = f"{subject}-{file_path.stem}-page-{page_number}-chunk-{index}"
+
+                collection.upsert(
+                    ids=[doc_id],
+                    embeddings=[embedding],
+                    documents=[chunk],
+                    metadatas=[{
+                        "subject": subject,
+                        "source": file_path.name,
+                        "page": page_number,
+                        "chunk_index": index,
+                        "content_type": "pdf"
+                    }]
+                )
+
+        print(f"Added PDF pages from {file_path.name}")
+
     elif file_path.suffix.lower() == ".pptx":
-        text = read_pptx(file_path)
+        slides = read_pptx(file_path)
+
+        if not slides:
+            print(f"No text found in {file_path.name}.")
+            return
+
+        for slide_data in slides:
+            slide_number = slide_data["slide"]
+            text = slide_data["text"]
+
+            chunks = chunk_text(text)
+
+            for index, chunk in enumerate(chunks):
+                embedding = create_embedding(chunk)
+
+                doc_id = f"{subject}-{file_path.stem}-slide-{slide_number}-chunk-{index}"
+
+                collection.upsert(
+                    ids=[doc_id],
+                    embeddings=[embedding],
+                    documents=[chunk],
+                    metadatas=[{
+                        "subject": subject,
+                        "source": file_path.name,
+                        "slide": slide_number,
+                        "chunk_index": index,
+                        "content_type": "pptx"
+                    }]
+                )
+
+        print(f"Added PPTX slides from {file_path.name}")
+
     else:
         print(f"Skipping unsupported file: {file_path}")
-        return
-
-    if not text.strip():
-        print(f"No text found in {file_path.name}. Можливо, це скан або картинка.")
-        return
-
-    chunks = chunk_text(text)
-
-    for index, chunk in enumerate(chunks):
-        embedding = create_embedding(chunk)
-
-        doc_id = f"{subject}-{file_path.stem}-{index}"
-
-        collection.add(
-            ids=[doc_id],
-            embeddings=[embedding],
-            documents=[chunk],
-            metadatas=[{
-                "subject": subject,
-                "source": file_path.name,
-                "chunk_index": index
-            }]
-        )
 
     print(f"Added {len(chunks)} chunks from {file_path.name}")
 
