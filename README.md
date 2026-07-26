@@ -17,6 +17,7 @@ The system reads lecture materials from PDF and PPTX files, converts them into e
 - 🌐 FastAPI backend
 - 🎛️ Streamlit frontend
 - 📌 Source labels with file names and page numbers
+- 🧱 Clean backend structure with services, routes, schemas, and config
 
 ---
 
@@ -31,6 +32,7 @@ The system reads lecture materials from PDF and PPTX files, converts them into e
 - python-pptx
 - python-dotenv
 - requests
+- uvicorn
 
 ---
 
@@ -39,19 +41,30 @@ The system reads lecture materials from PDF and PPTX files, converts them into e
 ```text
 RAG_project/
 │
-├── app.py              # FastAPI backend
-├── rag.py              # RAG logic: search + answer generation
-├── ingest.py           # Document ingestion and vector database creation
-├── frontend.py         # Streamlit user interface
-├── requirements.txt    # Python dependencies
+├── app/
+│   ├── main.py                         # FastAPI application entry point
+│   ├── api/
+│   │   └── routes.py                   # API endpoints
+│   ├── core/
+│   │   └── config.py                   # Project configuration and environment variables
+│   ├── models/
+│   │   └── schemas.py                  # Pydantic request schemas
+│   └── services/
+│       ├── rag_service.py              # RAG pipeline logic
+│       ├── openai_service.py           # OpenAI embeddings and answer generation
+│       └── vector_store_service.py     # ChromaDB vector store logic
+│
+├── ingest.py                           # Document ingestion and vector database creation
+├── frontend.py                         # Streamlit user interface
+├── requirements.txt                    # Python dependencies
 ├── README.md
 │
-├── data/               # Local notes grouped by subject
+├── data/                               # Local notes grouped by subject
 │   ├── math/
 │   ├── physics/
 │   └── ...
 │
-└── chroma_db/          # Local ChromaDB vector database
+└── chroma_db/                          # Local ChromaDB vector database
 ```
 
 > `data/`, `chroma_db/`, `.env`, and `venv/` are local-only files and should not be committed to GitHub.
@@ -120,7 +133,7 @@ Example:
 data/math/
 ```
 
-will appear as:
+will appear in the app as:
 
 ```text
 math
@@ -139,9 +152,10 @@ python3 ingest.py
 This will:
 
 1. Read PDF/PPTX files from `data/`
-2. Split documents into chunks
-3. Create embeddings
-4. Store them in ChromaDB
+2. Extract text from documents
+3. Split documents into chunks
+4. Create embeddings using the OpenAI API
+5. Store chunks, embeddings, and metadata in ChromaDB
 
 After successful ingestion, a local `chroma_db/` folder will be created.
 
@@ -152,7 +166,7 @@ After successful ingestion, a local `chroma_db/` folder will be created.
 Start the FastAPI server:
 
 ```bash
-uvicorn app:app --reload
+uvicorn app.main:app --reload
 ```
 
 Backend will run at:
@@ -197,6 +211,16 @@ http://localhost:8501
 
 Health check endpoint.
 
+Example response:
+
+```json
+{
+  "message": "University RAG API is running"
+}
+```
+
+---
+
 ### `GET /subjects`
 
 Returns available subjects from the vector database.
@@ -205,9 +229,11 @@ Example response:
 
 ```json
 {
-  "subjects": ["math", "physics"]
+  "subjects": ["discrete", "math", "physics"]
 }
 ```
+
+---
 
 ### `POST /ask`
 
@@ -242,6 +268,31 @@ Example response:
 
 ---
 
+## 🧩 How It Works
+
+The application follows a Retrieval-Augmented Generation pipeline:
+
+```text
+User question
+↓
+Create embedding for the question
+↓
+Search similar chunks in ChromaDB
+↓
+Retrieve relevant lecture fragments
+↓
+Send retrieved context to the language model
+↓
+Generate an answer
+↓
+Return answer with sources
+```
+
+The model does not answer only from its general knowledge.  
+It receives relevant fragments from the uploaded lecture notes and generates an answer based on that context.
+
+---
+
 ## 🧪 Example Questions
 
 - What does the lecture say about numerical series?
@@ -249,6 +300,61 @@ Example response:
 - Summarize this lecture.
 - What formulas are mentioned in the notes?
 - Which page explains this concept?
+- Де використовуються множини?
+- Що в конспекті сказано про числові ряди?
+- Поясни основну ідею цієї теми простими словами.
+
+---
+
+## 🏗️ Backend Architecture
+
+The backend is organized using a clean FastAPI structure.
+
+### `app/main.py`
+
+Creates the FastAPI application and connects API routes.
+
+### `app/api/routes.py`
+
+Contains API endpoints:
+
+- `/`
+- `/subjects`
+- `/ask`
+
+### `app/models/schemas.py`
+
+Contains Pydantic schemas for request validation.
+
+### `app/core/config.py`
+
+Stores project configuration:
+
+- OpenAI API key
+- ChromaDB path
+- collection name
+- embedding model
+- chat model
+
+### `app/services/rag_service.py`
+
+Contains the main RAG pipeline:
+
+- search relevant notes
+- build context
+- generate final answer
+- format sources
+
+### `app/services/openai_service.py`
+
+Handles OpenAI API calls:
+
+- embedding creation
+- answer generation
+
+### `app/services/vector_store_service.py`
+
+Handles ChromaDB connection and subject retrieval.
 
 ---
 
@@ -260,6 +366,8 @@ The assistant answers based on retrieved notes. If the necessary information is 
 
 PDF files that are scanned images may require OCR support, which is not included in the current version.
 
+The OpenAI API key should always be stored in `.env` and never committed to GitHub.
+
 ---
 
 ## 🗺️ Future Improvements
@@ -267,11 +375,16 @@ PDF files that are scanned images may require OCR support, which is not included
 - File upload directly from the web interface
 - OCR support for scanned PDFs
 - Better chunking strategy
+- Query rewriting for better retrieval
+- Reranking retrieved chunks
+- Local LLM support with Ollama
 - Support for more document formats
 - User authentication
 - Deployed cloud version
+- Docker support
 - Improved frontend design
 - Source preview with retrieved text snippets
+- Evaluation system for RAG quality
 
 ---
 
