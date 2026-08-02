@@ -1,8 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.models.schemas import QuestionRequest
-from app.services.rag_service import answer_question
-from app.services.vector_store_service import get_available_subjects
+from app.api.dependencies import get_rag_service
+from app.application.rag_service import RAGService
+from app.schemas.schemas import QuestionRequest
 
 
 router = APIRouter()
@@ -16,18 +16,21 @@ def home():
 
 
 @router.get("/subjects")
-def get_subjects():
-    subjects = get_available_subjects()
+def get_subjects(
+    rag_service: RAGService = Depends(get_rag_service),
+):
     return {
-        "subjects": subjects
+        "subjects": rag_service.get_subjects()
     }
 
-
 @router.post("/ask")
-def ask_question(request: QuestionRequest):
-    result = answer_question(
+def ask_question(
+    request: QuestionRequest,
+    rag_service: RAGService = Depends(get_rag_service),
+):
+    return rag_service.answer_question(
         question=request.question,
-        subject=request.subject
+        subject=request.subject,
     )
 
     return result
